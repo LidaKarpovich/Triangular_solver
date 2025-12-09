@@ -3,14 +3,26 @@
 #include <pthread.h>
 #include <math.h>
 
-typedef struct { int i; double *A; double *x; double *sum; int n; } thread_arg_t;
+typedef struct { int i; double *A; double *x; double *sum; int n; int lower; } thread_arg_t;
 
 void *thread_sum(void *arg) {
     thread_arg_t *t = (thread_arg_t*)arg;
     double s = 0.0;
-    for(int j=0;j<t->i;j++) s += t->A[t->i*t->n+j]*t->x[j];
+    if(t->lower) {
+        for(int j=0; j<t->i; j++) s += t->A[t->i*t->n + j] * t->x[j];
+    } else {
+        for(int j=t->i+1; j<t->n; j++) s += t->A[t->i*t->n + j] * t->x[j];
+    }
     *(t->sum) = s;
     return NULL;
+}
+
+// Функция для определения типа треугольной матрицы
+int is_lower_triangular(double *A, int n) {
+    for(int i=0;i<n;i++)
+        for(int j=i+1;j<n;j++)
+            if(fabs(A[i*n+j]) > 1e-12) return 0;
+    return 1;
 }
 
 int main(int argc, char *argv[]){
@@ -19,7 +31,7 @@ int main(int argc, char *argv[]){
         return 1;
     }
 
-    char *A_file=argv[1],*b_file=argv[2],*out_file=argv[3];
+    char *A_file=argv[1], *b_file=argv[2], *out_file=argv[3];
 
     FILE *fA=fopen(A_file,"r");
     FILE *fb=fopen(b_file,"r");
@@ -45,15 +57,34 @@ int main(int argc, char *argv[]){
         fscanf(fb,"%lf",&b[i]);
     fclose(fA); fclose(fb);
 
-    // Решение треугольной системы
-    for(int i=0;i<n;i++){
-        double sum=0.0;
-        pthread_t tid;
-        thread_arg_t t={i,A,x,&sum,n};
-        pthread_create(&tid,NULL,thread_sum,&t);
-        pthread_join(tid,NULL);
-        if(A[i*n+i]==0){ printf("Zero diagonal\n"); return 1;}
-        x[i]=(b[i]-sum)/A[i*n+i];
+    int lower = is_lower_triangular(A,n);
+    if(lower) printf("Matrix type: lower triangular\n");
+    else       printf("Matrix type: upper triangular\n");
+
+    if(lower) {
+        // Решение нижней матрицы
+        for(int i=0;i<n;i++){
+            double sum=0.0;
+            pthread_t tid;
+            thread_arg_t t={i,A,x,&sum,n,1};
+            pthread_create(&tid,NULL,thread_sum,&t);
+            pthread_join(tid,NULL);
+
+            if(fabs(A[i*n+i])<1e-12){ printf("Zero diagonal\n"); return 1;}
+            x[i]=(b[i]-sum)/A[i*n+i];
+        }
+    } else {
+        // Решение верхней матрицы (обратный порядок)
+        for(int i=n-1;i>=0;i--){
+            double sum=0.0;
+            pthread_t tid;
+            thread_arg_t t={i,A,x,&sum,n,0};
+            pthread_create(&tid,NULL,thread_sum,&t);
+            pthread_join(tid,NULL);
+
+            if(fabs(A[i*n+i])<1e-12){ printf("Zero diagonal\n"); return 1;}
+            x[i]=(b[i]-sum)/A[i*n+i];
+        }
     }
 
     // Вывод
@@ -69,4 +100,3 @@ int main(int argc, char *argv[]){
     free(A); free(b); free(x);
     return 0;
 }
-
