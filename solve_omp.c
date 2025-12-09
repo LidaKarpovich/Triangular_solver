@@ -17,7 +17,6 @@ int main(int argc, char *argv[]) {
     FILE *fb = fopen(b_file,"r");
     if(!fA || !fb){ perror("File open"); return 1; }
 
-    // Определяем размер матрицы
     int n = 0;
     double tmp;
     while(fscanf(fA,"%lf",&tmp) != EOF) n++;
@@ -29,12 +28,10 @@ int main(int argc, char *argv[]) {
     double *x = malloc(n*sizeof(double));
     for(int i=0;i<n;i++) x[i]=0.0;
 
-    // Чтение A
     for(int i=0;i<n;i++)
         for(int j=0;j<n;j++)
             fscanf(fA,"%lf",&A[i*n+j]);
 
-    // Чтение b
     for(int i=0;i<n;i++) fscanf(fb,"%lf",&b[i]);
     fclose(fA); fclose(fb);
 
@@ -42,8 +39,8 @@ int main(int argc, char *argv[]) {
     int is_lower = 1;
     int is_upper = 1;
     for(int i=0;i<n;i++){
-        for(int j=0;j<i;j++) if(fabs(A[i*n+j])>1e-12) is_upper=0; // есть элементы выше диагонали
-        for(int j=i+1;j<n;j++) if(fabs(A[i*n+j])>1e-12) is_lower=0; // есть элементы ниже диагонали
+        for(int j=0;j<i;j++) if(fabs(A[i*n+j])>1e-12) is_upper=0;
+        for(int j=i+1;j<n;j++) if(fabs(A[i*n+j])>1e-12) is_lower=0;
     }
 
     if(!is_lower && !is_upper){
@@ -74,12 +71,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Вывод
     printf("Solution x:\n");
     for(int i=0;i<n;i++) printf("%f ", x[i]);
     printf("\n");
 
-    // Сохранение
     FILE *fout = fopen(out_file,"w");
     for(int i=0;i<n;i++) fprintf(fout,"%f\n",x[i]);
     fclose(fout);
