@@ -5,7 +5,9 @@
 
 int main(int argc,char *argv[]){
     MPI_Init(&argc,&argv);
-    int rank; MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD,&rank);
+    MPI_Comm_size(MPI_COMM_WORLD,&size);
 
     if(argc!=4){
         if(rank==0) printf("Usage: %s A.txt b.txt out.txt\n",argv[0]);
@@ -47,11 +49,53 @@ int main(int argc,char *argv[]){
     MPI_Bcast(A,n*n,MPI_DOUBLE,0,MPI_COMM_WORLD);
     MPI_Bcast(b,n,MPI_DOUBLE,0,MPI_COMM_WORLD);
 
-    for(int i=0;i<n;i++){
-        double sum=0.0;
-        for(int j=0;j<i;j++) sum+=A[i*n+j]*x[j];
-        if(A[i*n+i]==0){ if(rank==0) printf("Zero diagonal\n"); MPI_Abort(MPI_COMM_WORLD,1);}
-        x[i]=(b[i]-sum)/A[i*n+i];
+
+    // Определение типа матрицы
+    int is_lower = 1, is_upper = 1;
+    if(rank==0){
+        for(int i=0;i<n;i++){
+            for(int j=0;j<n;j++){
+                if(i<j && fabs(A[i*n+j])>1e-12) is_lower = 0;
+                if(i>j && fabs(A[i*n+j])>1e-12) is_upper = 0;
+            }
+        }
+        if(is_lower && !is_upper) printf("Matrix type detected: lower triangular\n");
+        else if(is_upper && !is_lower) printf("Matrix type detected: upper triangular\n");
+        else { 
+            printf("Matrix is not triangular\n"); 
+            MPI_Abort(MPI_COMM_WORLD,1);
+        }
+    }
+    MPI_Bcast(&is_lower,1,MPI_INT,0,MPI_COMM_WORLD);
+
+    if(is_lower){
+        // Нижняя треугольная (forward substitution) с распределением
+        for(int i=0;i<n;i++){
+            int owner = i % size;  // кто считает x[i]
+            double xi;
+            if(rank==owner){
+                double sum=0.0;
+                for(int j=0;j<i;j++) sum+=A[i*n+j]*x[j];
+                if(fabs(A[i*n+i])<1e-12){ if(rank==0) printf("Zero diagonal\n"); MPI_Abort(MPI_COMM_WORLD,1);}
+                xi = (b[i]-sum)/A[i*n+i];
+            }
+            MPI_Bcast(&xi,1,MPI_DOUBLE,owner,MPI_COMM_WORLD);
+            x[i] = xi;
+        }
+    } else {
+        // Верхняя треугольная (back substitution) с распределением
+        for(int i=n-1;i>=0;i--){
+            int owner = i % size;
+            double xi;
+            if(rank==owner){
+                double sum=0.0;
+                for(int j=i+1;j<n;j++) sum+=A[i*n+j]*x[j];
+                if(fabs(A[i*n+i])<1e-12){ if(rank==0) printf("Zero diagonal\n"); MPI_Abort(MPI_COMM_WORLD,1);}
+                xi = (b[i]-sum)/A[i*n+i];
+            }
+            MPI_Bcast(&xi,1,MPI_DOUBLE,owner,MPI_COMM_WORLD);
+            x[i] = xi;
+        }
     }
 
     if(rank==0){
@@ -68,4 +112,3 @@ int main(int argc,char *argv[]){
     MPI_Finalize();
     return 0;
 }
-
