@@ -38,13 +38,40 @@ int main(int argc, char *argv[]) {
     for(int i=0;i<n;i++) fscanf(fb,"%lf",&b[i]);
     fclose(fA); fclose(fb);
 
-    // Решение треугольной системы (нижняя)
+    // Определяем тип треугольной матрицы
+    int is_lower = 1;
+    int is_upper = 1;
     for(int i=0;i<n;i++){
-        double sum = 0.0;
-        #pragma omp parallel for reduction(+:sum)
-        for(int j=0;j<i;j++) sum += A[i*n+j]*x[j];
-        if(A[i*n+i]==0){ printf("Zero diagonal\n"); return 1; }
-        x[i] = (b[i]-sum)/A[i*n+i];
+        for(int j=0;j<i;j++) if(fabs(A[i*n+j])>1e-12) is_upper=0; // есть элементы выше диагонали
+        for(int j=i+1;j<n;j++) if(fabs(A[i*n+j])>1e-12) is_lower=0; // есть элементы ниже диагонали
+    }
+
+    if(!is_lower && !is_upper){
+        printf("Matrix is not triangular!\n");
+        free(A); free(b); free(x);
+        return 1;
+    }
+
+    if(is_lower) printf("Matrix type detected: lower\n");
+    if(is_upper) printf("Matrix type detected: upper\n");
+
+    // Решение треугольной системы
+    if(is_lower){
+        for(int i=0;i<n;i++){
+            double sum = 0.0;
+            #pragma omp parallel for reduction(+:sum)
+            for(int j=0;j<i;j++) sum += A[i*n+j]*x[j]; // параллельное суммирование
+            if(fabs(A[i*n+i])<1e-12){ printf("Zero diagonal\n"); free(A); free(b); free(x); return 1; }
+            x[i] = (b[i]-sum)/A[i*n+i]; // последовательное вычисление x[i]
+        }
+    } else {
+        for(int i=n-1;i>=0;i--){
+            double sum = 0.0;
+            #pragma omp parallel for reduction(+:sum)
+            for(int j=i+1;j<n;j++) sum += A[i*n+j]*x[j]; // параллельное суммирование
+            if(fabs(A[i*n+i])<1e-12){ printf("Zero diagonal\n"); free(A); free(b); free(x); return 1; }
+            x[i] = (b[i]-sum)/A[i*n+i]; // последовательное вычисление x[i]
+        }
     }
 
     // Вывод
@@ -60,4 +87,3 @@ int main(int argc, char *argv[]) {
     free(A); free(b); free(x);
     return 0;
 }
-
