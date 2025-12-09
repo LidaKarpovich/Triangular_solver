@@ -69,7 +69,6 @@ int main(int argc,char *argv[]){
     MPI_Bcast(&is_lower,1,MPI_INT,0,MPI_COMM_WORLD);
 
     if(is_lower){
-        // Нижняя треугольная (forward substitution) с распределением
         for(int i=0;i<n;i++){
             int owner = i % size;  // кто считает x[i]
             double xi;
@@ -83,7 +82,6 @@ int main(int argc,char *argv[]){
             x[i] = xi;
         }
     } else {
-        // Верхняя треугольная (back substitution) с распределением
         for(int i=n-1;i>=0;i--){
             int owner = i % size;
             double xi;
